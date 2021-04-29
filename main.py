@@ -1,12 +1,16 @@
 import sys, pathlib, os, shlex, logging
 
+import argh
 from gi.repository import Gtk, Gdk, GdkPixbuf
 
 class Images:
-    def __init__(self):
-        self.images = [str(x) for x in pathlib.Path(".").glob("*") if x.is_file()]
+    def __init__(self, directory):
+        self.images = [str(x) for x in pathlib.Path(directory).glob("*.jpg") if x.is_file()]
+        self.images += [str(x) for x in pathlib.Path(directory).glob("*.png") if x.is_file()]
+        self.images += [str(x) for x in pathlib.Path(directory).glob("*.jpeg") if x.is_file()]
         self.images.sort(key=os.path.getmtime)
         self.current_index = 0
+        print(self.images)
 
     def next_image_filename(self):
         if self.current_index < len(self.images):
@@ -15,13 +19,14 @@ class Images:
         else:
             return None
 
-ims = Images()
+ims = None
                            
 class MainWindow(Gtk.Window):
-    def __init__(self):
+    def __init__(self, directory, categories):
         Gtk.Window.__init__(self, title="pyimgsort")
         self.set_border_width(10)
         self.filename = None
+        self.directory = directory
 
         # box
         overlay = Gtk.Overlay()
@@ -33,7 +38,7 @@ class MainWindow(Gtk.Window):
         self.top_button.connect("clicked", self.picture_next)
         fixed.put(self.top_button, 5, 5)
 
-        for i, d in enumerate(sys.argv[1:]):
+        for i, d in enumerate(categories):
             label = f"{d}"
             button = Gtk.Button(label)
             button.connect("clicked", self.picture_move)
@@ -54,10 +59,11 @@ class MainWindow(Gtk.Window):
 
     def picture_move(self, widget):
         if self.filename:
-            directory = widget.get_property("label")
-            print(self.filename, directory)
-            os.system(f"mkdir -p {shlex.quote(directory)}")
-            os.system(f"mv {shlex.quote(str(self.filename))} {shlex.quote(directory)}")
+            subdir = widget.get_property("label")
+            target_dir = str(pathlib.Path(self.directory) / subdir)
+            print(self.filename, target_dir)
+            os.system(f"mkdir -p {shlex.quote(target_dir)}")
+            os.system(f"mv {shlex.quote(str(self.filename))} {shlex.quote(target_dir)}")
         self.picture_next(None)
 
     def picture_rescale(self, widget):
@@ -93,8 +99,14 @@ class MainWindow(Gtk.Window):
         self.image.set_from_pixbuf(display_pixbuf)
         top_btn_text = f"{self.filename} ({pwidth}x{pheight}) (image {ims.current_index}/{len(ims.images)}) scaled {int(scale_factor*10)/10} - click to skip"
         self.top_button.set_label(top_btn_text)
-        
-window = MainWindow()
-window.connect("delete-event", Gtk.main_quit)
-window.show_all()
-Gtk.main()
+
+def main(directory, categories_comma_sep):
+    global ims
+    ims = Images(directory)
+    window = MainWindow(directory, categories_comma_sep.split(','))
+    window.connect("delete-event", Gtk.main_quit)
+    window.show_all()
+    Gtk.main()
+
+if __name__ == "__main__":
+    argh.dispatch_command(main)
